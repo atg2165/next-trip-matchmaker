@@ -26,7 +26,7 @@ export const listTrips = createServerFn({ method: "GET" })
 
 export const createTrip = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { name?: string; state?: string; homeLabel?: string; destinationCount?: number }) => {
+  .validator((input: { name?: string; state?: string; homeLabel?: string; destinationCount?: number }) => {
     const name = (input.name ?? "").trim().slice(0, 80);
     if (!name) throw new Error("Trip name is required");
     const state = input.state ?? "";
@@ -56,7 +56,7 @@ export const createTrip = createServerFn({ method: "POST" })
 
 export const renameTrip = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { id?: string; name?: string }) => {
+  .validator((input: { id?: string; name?: string }) => {
     const id = input.id ?? "";
     const name = (input.name ?? "").trim().slice(0, 80);
     if (!id || !name) throw new Error("Trip name is required");
@@ -74,7 +74,7 @@ export const renameTrip = createServerFn({ method: "POST" })
 
 export const deleteTrip = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { id?: string }) => {
+  .validator((input: { id?: string }) => {
     const id = input.id ?? "";
     if (!id) throw new Error("Missing trip id");
     return { id };
