@@ -49,12 +49,12 @@ function fromBase64Url(encoded: string) {
   return bytes;
 }
 
-function safeNumber(value: unknown, fallback: number, min: number, max: number) {
+export function safeNumber(value: unknown, fallback: number, min: number, max: number) {
   const n = typeof value === "number" ? value : Number(value);
   return Number.isFinite(n) ? clamp(n, min, max) : fallback;
 }
 
-function safeName(value: unknown, fallback: string) {
+export function safeName(value: unknown, fallback: string) {
   if (typeof value !== "string") return fallback;
   const trimmed = value.trim().replace(/\s+/g, " ").slice(0, 80);
   return trimmed || fallback;

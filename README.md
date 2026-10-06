@@ -27,3 +27,15 @@ npm run dev
 - TypeScript
 - React
 - Tailwind CSS
+
+## Group matchmaking
+
+"Plan with friends" turns a comparison into a group. Friends open the invite link, add a
+name (no account — they get an anonymous Supabase session), and set their own priority
+sliders and home city against one shared shortlist. The group page shows a combined
+ranking (Average, Least misery or Most pleasure) and who loves or compromises on each pick,
+updating live via Supabase Realtime.
+
+Setup needed on the backend: apply `drizzle/migrations/0001_create_groups.sql` and enable
+anonymous sign-ins. Scoring lives in `src/lib/group.ts`; server functions in
+`src/lib/groups.functions.ts`.

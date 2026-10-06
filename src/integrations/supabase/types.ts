@@ -14,6 +14,83 @@ export type Database = {
   }
   public: {
     Tables: {
+      group_members: {
+        Row: {
+          created_at: string
+          display_name: string
+          group_id: string
+          home_city_id: string | null
+          home_custom_name: string
+          id: string
+          priorities: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          display_name: string
+          group_id: string
+          home_city_id?: string | null
+          home_custom_name?: string
+          id?: string
+          priorities?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string
+          group_id?: string
+          home_city_id?: string | null
+          home_custom_name?: string
+          id?: string
+          priorities?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_members_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      groups: {
+        Row: {
+          created_at: string
+          destinations: Json
+          id: string
+          invite_code: string
+          method: string
+          name: string
+          owner_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          destinations?: Json
+          id?: string
+          invite_code?: string
+          method?: string
+          name: string
+          owner_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          destinations?: Json
+          id?: string
+          invite_code?: string
+          method?: string
+          name?: string
+          owner_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       trips: {
         Row: {
           created_at: string
@@ -52,7 +129,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      is_group_member: { Args: { _group_id: string }; Returns: boolean }
     }
     Enums: {
       [_ in never]: never

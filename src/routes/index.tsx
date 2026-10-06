@@ -10,17 +10,11 @@ import {
   Plane,
   Plus,
   Share2,
-  Trash2,
-  Wallet,
-  UtensilsCrossed,
-  Martini,
-  Mountain,
-  Clock,
+  Users,
   MapPin,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,6 +34,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { CityCombobox } from "@/components/city-combobox";
+import { DestinationEditorCard } from "@/components/destination-editor";
+import { PrioritySliders } from "@/components/priority-sliders";
+import { StartGroupDialog } from "@/components/start-group-dialog";
 import { useSession, signOutEverywhere } from "@/hooks/use-session";
 import { buildShareUrl, decodeTripState, encodeTripState, type TripState } from "@/lib/share-state";
 import { createTrip } from "@/lib/trips.functions";
@@ -49,9 +46,7 @@ import { cn } from "@/lib/utils";
 import {
   DEFAULT_HOME_CITY_ID,
   MAX_DESTINATIONS,
-  PRIORITY_LABELS,
   buildDefaultDestinations,
-  clamp,
   customDestination,
   defaultPriorities,
   destinationFromCity,
@@ -91,14 +86,6 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-const priorityIcons: Record<keyof Priorities, typeof Wallet> = {
-  cost: Wallet,
-  time: Clock,
-  food: UtensilsCrossed,
-  nightlife: Martini,
-  nature: Mountain,
-};
-
 function Index() {
   const search = Route.useSearch();
   const { data: user } = useSession();
@@ -114,6 +101,7 @@ function Index() {
     () => restored?.destinations ?? buildDefaultDestinations(),
   );
   const [saveOpen, setSaveOpen] = useState(false);
+  const [groupOpen, setGroupOpen] = useState(false);
   const [tripName, setTripName] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -276,6 +264,9 @@ function Index() {
             <Button variant="outline" onClick={() => setSaveOpen(true)}>
               <BookmarkPlus className="size-4" /> Save trip
             </Button>
+            <Button variant="outline" onClick={() => setGroupOpen(true)}>
+              <Users className="size-4" /> Plan with friends
+            </Button>
             <SessionMenu />
           </div>
         </div>
@@ -290,32 +281,7 @@ function Index() {
               Slide from 1 (barely matters) to 10 (deal-breaker). Scores update instantly.
             </p>
           </div>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {(Object.keys(PRIORITY_LABELS) as (keyof Priorities)[]).map((key) => {
-              const Icon = priorityIcons[key];
-              return (
-                <div key={key}>
-                  <div className="mb-3 flex items-center justify-between gap-2">
-                    <span className="flex items-center gap-2 text-sm font-medium">
-                      <Icon className="size-4 text-muted-foreground" />
-                      {PRIORITY_LABELS[key]}
-                    </span>
-                    <span className="rounded-full bg-secondary px-2.5 py-0.5 text-xs font-semibold text-secondary-foreground tabular-nums">
-                      {priorities[key]}
-                    </span>
-                  </div>
-                  <Slider
-                    min={1}
-                    max={10}
-                    step={1}
-                    value={[priorities[key]]}
-                    onValueChange={([v]) => setPriorities((p) => ({ ...p, [key]: v }))}
-                    aria-label={`${PRIORITY_LABELS[key]} importance`}
-                  />
-                </div>
-              );
-            })}
-          </div>
+          <PrioritySliders priorities={priorities} onChange={setPriorities} />
         </section>
 
         {/* Rankings */}
@@ -438,74 +404,15 @@ function Index() {
 
           <div className="grid gap-4 md:grid-cols-2">
             {destinations.map((d) => (
-              <div key={d.id} className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-                <div className="flex items-center gap-2">
-                  <CityCombobox
-                    value={d.cityId}
-                    onSelect={(cityId) => swapCity(d.id, cityId)}
-                     onCreate={(cityName) => setCustomCity(d.id, cityName)}
-                     customValue={d.cityId ? undefined : d.name}
-                    label="Swap city"
-                     placeholder="Search or enter a city"
-                    disabledIds={[homeCityId ?? "", ...destinations.map((x) => x.cityId ?? "")]}
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Remove ${d.name}`}
-                    onClick={() => setDestinations((prev) => prev.filter((x) => x.id !== d.id))}
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
-                </div>
-                <label className="mt-3 block">
-                  <span className="mb-1 block text-xs font-medium text-muted-foreground">
-                    Display name
-                  </span>
-                  <Input
-                    value={d.name}
-                    onChange={(e) => update(d.id, { name: e.target.value })}
-                    aria-label="Destination name"
-                  />
-                </label>
-                <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  <Field
-                    label="Cost ($)"
-                    value={d.cost}
-                    step={10}
-                    min={0}
-                    onChange={(v) => update(d.id, { cost: Math.max(0, v) })}
-                  />
-                  <Field
-                    label="Flight (hrs)"
-                    value={d.time}
-                    step={0.5}
-                    min={0}
-                    onChange={(v) => update(d.id, { time: Math.max(0, v) })}
-                  />
-                  <Field
-                    label="Food (1-10)"
-                    value={d.food}
-                    min={1}
-                    max={10}
-                    onChange={(v) => update(d.id, { food: clamp(v, 1, 10) })}
-                  />
-                  <Field
-                    label="Nightlife (1-10)"
-                    value={d.nightlife}
-                    min={1}
-                    max={10}
-                    onChange={(v) => update(d.id, { nightlife: clamp(v, 1, 10) })}
-                  />
-                  <Field
-                    label="Nature (1-10)"
-                    value={d.nature}
-                    min={1}
-                    max={10}
-                    onChange={(v) => update(d.id, { nature: clamp(v, 1, 10) })}
-                  />
-                </div>
-              </div>
+              <DestinationEditorCard
+                key={d.id}
+                destination={d}
+                disabledIds={[homeCityId ?? "", ...destinations.map((x) => x.cityId ?? "")]}
+                onUpdate={(patch) => update(d.id, patch)}
+                onSwapCity={(cityId) => swapCity(d.id, cityId)}
+                onCustomCity={(cityName) => setCustomCity(d.id, cityName)}
+                onRemove={() => setDestinations((prev) => prev.filter((x) => x.id !== d.id))}
+              />
             ))}
           </div>
         </section>
@@ -550,6 +457,8 @@ function Index() {
           </div>
         </section>
       </div>
+
+      <StartGroupDialog open={groupOpen} onOpenChange={setGroupOpen} tripState={tripState} />
 
       <Dialog open={saveOpen} onOpenChange={setSaveOpen}>
         <DialogContent className="sm:max-w-sm">
@@ -638,6 +547,11 @@ function SessionMenu() {
             <Plane className="size-4" /> My Trips
           </Link>
         </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link to="/groups">
+            <Users className="size-4" /> My Groups
+          </Link>
+        </DropdownMenuItem>
         <DropdownMenuItem onClick={() => signOutEverywhere(queryClient, navigate)}>
           <LogOut className="size-4" /> Sign out
         </DropdownMenuItem>
@@ -665,39 +579,5 @@ function Cell({ best, children }: { best: boolean; children: React.ReactNode }) 
     >
       {children}
     </td>
-  );
-}
-
-function Field({
-  label,
-  value,
-  onChange,
-  step = 1,
-  min,
-  max,
-}: {
-  label: string;
-  value: number;
-  onChange: (v: number) => void;
-  step?: number;
-  min?: number;
-  max?: number;
-}) {
-  return (
-    <label className="block">
-      <span className="mb-1 block text-xs font-medium text-muted-foreground">{label}</span>
-      <Input
-        type="number"
-        inputMode="decimal"
-        value={value}
-        step={step}
-        min={min}
-        max={max}
-        onChange={(e) => {
-          const v = Number(e.target.value);
-          if (!Number.isNaN(v)) onChange(v);
-        }}
-      />
-    </label>
   );
 }

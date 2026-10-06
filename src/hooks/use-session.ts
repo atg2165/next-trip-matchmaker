@@ -30,3 +30,18 @@ export async function signOutEverywhere(queryClient: QueryClient, navigate: Navi
   await supabase.auth.signOut();
   await navigate({ to: "/auth", replace: true });
 }
+
+/**
+ * Make sure there is a Supabase session, signing in anonymously when there
+ * isn't one. Lets friends join a group from an invite link with no account;
+ * the anonymous identity gets a real user id, so RLS and Realtime work.
+ */
+export async function ensureSession() {
+  const { data } = await supabase.auth.getSession();
+  if (data.session) return data.session;
+  const { data: anon, error } = await supabase.auth.signInAnonymously();
+  if (error || !anon.session) {
+    throw new Error(error?.message ?? "Couldn't start a guest session");
+  }
+  return anon.session;
+}
