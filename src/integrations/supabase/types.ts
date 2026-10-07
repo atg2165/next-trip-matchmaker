@@ -129,7 +129,22 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_group: {
+        Args: {
+          _name: string
+          _destinations: Json
+          _display_name: string
+          _priorities: Json
+          _home_city_id: string | null
+          _home_custom_name: string
+        }
+        Returns: Json
+      }
       is_group_member: { Args: { _group_id: string }; Returns: boolean }
+      join_group: {
+        Args: { _group_id: string; _code: string; _display_name: string }
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never

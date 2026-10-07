@@ -2,7 +2,6 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Json } from "@/integrations/supabase/types";
 import {
-  MAX_GROUP_MEMBERS,
   parseDestinations,
   parseHomeCityId,
   parseMethod,
@@ -10,12 +9,7 @@ import {
   type GroupMethod,
 } from "@/lib/group";
 import { safeName } from "@/lib/share-state";
-import {
-  DEFAULT_HOME_CITY_ID,
-  defaultPriorities,
-  type Destination,
-  type Priorities,
-} from "@/lib/trip";
+import { DEFAULT_HOME_CITY_ID, type Destination, type Priorities } from "@/lib/trip";
 
 export type GroupRow = {
   id: string;
@@ -74,33 +68,19 @@ export const createGroup = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data, context }) => {
-    const { data: group, error } = await context.supabase
-      .from("groups")
-      .insert({
-        owner_id: context.userId,
-        name: data.name,
-        destinations: data.destinations as unknown as Json,
-      })
-      .select("id, invite_code")
-      .single();
-    if (error) throw new Error(error.message);
-
-    // Members can't insert their own rows (that would let anyone join any
-    // group), so the owner's seat is added with the service role.
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error: memberError } = await supabaseAdmin.from("group_members").insert({
-      group_id: group.id,
-      user_id: context.userId,
-      display_name: data.displayName,
-      priorities: data.priorities as unknown as Json,
-      home_city_id: data.homeCityId,
-      home_custom_name: data.homeCustomName,
+    // One database function creates the group and the owner's seat atomically
+    // (members can't insert their own rows, which would let anyone join any group).
+    const { data: created, error } = await context.supabase.rpc("create_group", {
+      _name: data.name,
+      _destinations: data.destinations as unknown as Json,
+      _display_name: data.displayName,
+      _priorities: data.priorities as unknown as Json,
+      _home_city_id: data.homeCityId,
+      _home_custom_name: data.homeCustomName,
     });
-    if (memberError) {
-      await supabaseAdmin.from("groups").delete().eq("id", group.id);
-      throw new Error(memberError.message);
-    }
-    return { id: group.id, inviteCode: group.invite_code };
+    if (error) throw new Error(error.message);
+    const { id, inviteCode } = created as { id: string; inviteCode: string };
+    return { id, inviteCode };
   });
 
 /** Join via invite link. Idempotent: rejoining returns the existing seat. */
@@ -112,42 +92,15 @@ export const joinGroup = createServerFn({ method: "POST" })
     displayName: cleanName(input.displayName, "Friend"),
   }))
   .handler(async ({ data, context }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-
-    const { data: group } = await supabaseAdmin
-      .from("groups")
-      .select("id, invite_code")
-      .eq("id", data.groupId)
-      .maybeSingle();
-    // Same message for "no such group" and "wrong code" so ids can't be probed.
-    if (!group || !data.code || group.invite_code !== data.code) {
-      throw new Error("This invite link isn't valid any more");
-    }
-
-    const { data: members, error } = await supabaseAdmin
-      .from("group_members")
-      .select("user_id, display_name")
-      .eq("group_id", group.id);
-    if (error) throw new Error(error.message);
-
-    if (members.some((m) => m.user_id === context.userId)) return { id: group.id };
-    if (members.length >= MAX_GROUP_MEMBERS) throw new Error("This group is full");
-
-    const taken = new Set(members.map((m) => m.display_name.toLocaleLowerCase()));
-    let displayName = data.displayName;
-    for (let n = 2; taken.has(displayName.toLocaleLowerCase()); n++) {
-      displayName = `${data.displayName.slice(0, 36)} ${n}`;
-    }
-
-    const { error: insertError } = await supabaseAdmin.from("group_members").insert({
-      group_id: group.id,
-      user_id: context.userId,
-      display_name: displayName,
-      priorities: defaultPriorities as unknown as Json,
-      home_city_id: DEFAULT_HOME_CITY_ID,
+    // Validates the code, enforces the member cap and de-duplicates the name in
+    // the database; rejoining returns the existing seat.
+    const { data: id, error } = await context.supabase.rpc("join_group", {
+      _group_id: data.groupId,
+      _code: data.code,
+      _display_name: data.displayName,
     });
-    if (insertError) throw new Error(insertError.message);
-    return { id: group.id };
+    if (error) throw new Error(error.message);
+    return { id };
   });
 
 /** The group and its members, or null when the caller isn't in it. */

@@ -36,6 +36,7 @@ sliders and home city against one shared shortlist. The group page shows a combi
 ranking (Average, Least misery or Most pleasure) and who loves or compromises on each pick,
 updating live via Supabase Realtime.
 
-Setup needed on the backend: apply `drizzle/migrations/0001_create_groups.sql` and enable
-anonymous sign-ins. Scoring lives in `src/lib/group.ts`; server functions in
+Setup needed on the backend: apply `drizzle/migrations/0001_create_groups.sql` and
+`0002_group_rpcs.sql` (creating and joining run as database functions, so no service-role
+key is needed) and enable anonymous sign-ins. Scoring lives in `src/lib/group.ts`; server functions in
 `src/lib/groups.functions.ts`.

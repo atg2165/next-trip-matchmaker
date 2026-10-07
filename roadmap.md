@@ -10,4 +10,4 @@
 - [x] Sign-in page, reset-password page, session-aware header, verified build + preview
 - [ ] Optional: end-to-end test of save/open flow with a real signed-in account (needs a live sign-up)
 - [x] Group matchmaking: invite link (name only, anonymous sign-in), shared shortlist, per-person sliders + home city, combined ranking (Average / Least misery / Most pleasure) with who loves / compromises, live via Supabase Realtime
-- [ ] Apply `drizzle/migrations/0001_create_groups.sql` and enable anonymous sign-ins in Lovable Cloud, then run an end-to-end two-browser test of a group
+- [ ] Apply `drizzle/migrations/0001_create_groups.sql` and `0002_group_rpcs.sql`, enable anonymous sign-ins in Lovable Cloud, then run an end-to-end two-browser test of a group
