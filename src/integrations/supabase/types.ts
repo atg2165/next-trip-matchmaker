@@ -61,6 +61,9 @@ export type Database = {
       groups: {
         Row: {
           created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decided_destination_id: string | null
           destinations: Json
           id: string
           invite_code: string
@@ -71,6 +74,9 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decided_destination_id?: string | null
           destinations?: Json
           id?: string
           invite_code?: string
@@ -81,6 +87,9 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decided_destination_id?: string | null
           destinations?: Json
           id?: string
           invite_code?: string
@@ -141,6 +150,11 @@ export type Database = {
         Returns: Json
       }
       is_group_member: { Args: { _group_id: string }; Returns: boolean }
+      lock_in_group: {
+        Args: { _group_id: string; _destination_id: string }
+        Returns: undefined
+      }
+      reopen_group: { Args: { _group_id: string }; Returns: undefined }
       join_group: {
         Args: { _group_id: string; _code: string; _display_name: string }
         Returns: string

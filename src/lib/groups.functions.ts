@@ -11,6 +11,13 @@ import {
 import { safeName } from "@/lib/share-state";
 import { DEFAULT_HOME_CITY_ID, type Destination, type Priorities } from "@/lib/trip";
 
+export type GroupDecision = {
+  destinationId: string;
+  decidedAt: string;
+  /** Null when the member who locked it has since left the group. */
+  decidedByName: string | null;
+};
+
 export type GroupRow = {
   id: string;
   name: string;
@@ -19,6 +26,7 @@ export type GroupRow = {
   method: GroupMethod;
   destinations: Destination[];
   updatedAt: string;
+  decision: GroupDecision | null;
 };
 
 export type MemberRow = {
@@ -110,7 +118,9 @@ export const getGroup = createServerFn({ method: "GET" })
   .handler(async ({ data, context }): Promise<GroupData | null> => {
     const { data: group, error } = await context.supabase
       .from("groups")
-      .select("id, name, owner_id, invite_code, method, destinations, updated_at")
+      .select(
+        "id, name, owner_id, invite_code, method, destinations, updated_at, decided_destination_id, decided_at, decided_by",
+      )
       .eq("id", data.groupId)
       .maybeSingle();
     if (error) throw new Error(error.message);
@@ -133,6 +143,15 @@ export const getGroup = createServerFn({ method: "GET" })
         method: parseMethod(group.method),
         destinations: parseDestinations(group.destinations),
         updatedAt: group.updated_at,
+        decision:
+          group.decided_destination_id && group.decided_at
+            ? {
+                destinationId: group.decided_destination_id,
+                decidedAt: group.decided_at,
+                decidedByName:
+                  members.find((m) => m.user_id === group.decided_by)?.display_name ?? null,
+              }
+            : null,
       },
       members: members.map((m) => ({
         id: m.id,
@@ -226,6 +245,33 @@ export const updateGroup = createServerFn({ method: "POST" })
       ...(data.method !== undefined && { method: data.method }),
     };
     const { error } = await context.supabase.from("groups").update(patch).eq("id", data.groupId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+/** Lock one destination as the group's final pick (any member). */
+export const lockInGroup = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { groupId?: string; destinationId?: string }) => ({
+    groupId: requireId(input.groupId),
+    destinationId: requireId(input.destinationId),
+  }))
+  .handler(async ({ data, context }) => {
+    // The database rejects a second lock with "Already locked in by <name>".
+    const { error } = await context.supabase.rpc("lock_in_group", {
+      _group_id: data.groupId,
+      _destination_id: data.destinationId,
+    });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+/** Clear the group's final pick (any member). */
+export const reopenGroup = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { groupId?: string }) => ({ groupId: requireId(input.groupId) }))
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase.rpc("reopen_group", { _group_id: data.groupId });
     if (error) throw new Error(error.message);
     return { ok: true };
   });

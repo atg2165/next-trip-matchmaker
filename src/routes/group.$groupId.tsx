@@ -4,17 +4,29 @@ import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import {
   Heart,
+  Lock,
   LoaderCircle,
   LogOut,
   MapPin,
   Plane,
   Plus,
+  RotateCcw,
   Share2,
   Trash2,
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { CityCombobox } from "@/components/city-combobox";
 import { DestinationEditorCard } from "@/components/destination-editor";
 import { PrioritySliders } from "@/components/priority-sliders";
@@ -37,6 +49,8 @@ import {
   deleteGroup,
   joinGroup,
   leaveGroup,
+  lockInGroup,
+  reopenGroup,
   updateGroup,
   updateMyMember,
   type GroupData,
@@ -218,6 +232,10 @@ function GroupView({ data }: { data: GroupData }) {
   const saveGroup = useServerFn(updateGroup);
   const leave = useServerFn(leaveGroup);
   const remove = useServerFn(deleteGroup);
+  const lockIn = useServerFn(lockInGroup);
+  const reopen = useServerFn(reopenGroup);
+  const [pending, setPending] = useState<GroupDestination | null>(null);
+  const [lockBusy, setLockBusy] = useState(false);
 
   const me = members.find((m) => m.userId === data.me);
   const isOwner = group.ownerId === data.me;
@@ -292,6 +310,10 @@ function GroupView({ data }: { data: GroupData }) {
     [destinations, effectiveMembers, method],
   );
 
+  const decision = group.decision;
+  const locked = decision !== null;
+  const lockedDest = decision ? ranked.find((d) => d.id === decision.destinationId) : undefined;
+
   if (!me) {
     // Removed from the group while viewing it.
     return <JoinCard groupId={group.id} />;
@@ -305,6 +327,32 @@ function GroupView({ data }: { data: GroupData }) {
     } catch {
       toast.error("Couldn't copy the link. Copy it from the address bar instead.");
     }
+  };
+
+  const confirmLock = async () => {
+    if (!pending || lockBusy) return;
+    setLockBusy(true);
+    try {
+      await lockIn({ data: { groupId: group.id, destinationId: pending.id } });
+      toast.success(`Locked in ${pending.name}`);
+    } catch (error) {
+      // A second simultaneous lock comes back as "Already locked in by <name>".
+      toast.error(error instanceof Error ? error.message : "Couldn't lock it in");
+    } finally {
+      setLockBusy(false);
+      setPending(null);
+      await refresh();
+    }
+  };
+
+  const handleReopen = async () => {
+    try {
+      await reopen({ data: { groupId: group.id } });
+      toast.success("Reopened — the group can keep deciding");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't reopen the group");
+    }
+    await refresh();
   };
 
   const update = (id: string, patch: Partial<Destination>) =>
@@ -364,6 +412,41 @@ function GroupView({ data }: { data: GroupData }) {
         </>
       }
     >
+      {decision && lockedDest && (
+        <section
+          aria-label="Locked in"
+          className="rounded-2xl border border-primary/40 bg-primary/5 p-6 shadow-sm ring-1 ring-primary/20"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0">
+              <span className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground">
+                <Lock className="size-3" /> Locked in
+              </span>
+              <h2 className="text-2xl font-bold">{lockedDest.name}</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Locked in by {decision.decidedByName ?? "a former member"}
+              </p>
+            </div>
+            <div className="flex items-start gap-4">
+              <div className="text-right">
+                <div className="text-3xl font-bold tabular-nums text-primary">
+                  {lockedDest.groupScore}
+                </div>
+                <div className="text-xs text-muted-foreground">group score / 100</div>
+              </div>
+              <Button variant="outline" onClick={handleReopen}>
+                <RotateCcw className="size-4" /> Reopen
+              </Button>
+            </div>
+          </div>
+          {summarizeDestination(lockedDest, effectiveMembers) && (
+            <p className="mt-4 rounded-xl bg-accent/60 p-4 text-sm text-accent-foreground">
+              {summarizeDestination(lockedDest, effectiveMembers)}
+            </p>
+          )}
+        </section>
+      )}
+
       {/* Members */}
       <section aria-label="Members" className="flex flex-wrap gap-2">
         {effectiveMembers.map((m) => (
@@ -393,7 +476,8 @@ function GroupView({ data }: { data: GroupData }) {
             type="single"
             variant="outline"
             value={method}
-            onValueChange={(v) => v && setMethod(v as GroupMethod)}
+            onValueChange={(v) => v && !locked && setMethod(v as GroupMethod)}
+            disabled={locked}
             aria-label="How to combine everyone's scores"
           >
             {(Object.keys(GROUP_METHODS) as GroupMethod[]).map((key) => (
@@ -412,6 +496,9 @@ function GroupView({ data }: { data: GroupData }) {
               members={effectiveMembers}
               meId={me.id}
               method={method}
+              isLocked={decision?.destinationId === d.id}
+              canLock={!locked}
+              onLock={() => setPending(d)}
               homeName={myHome.name.split(",")[0] as string}
             />
           ))}
@@ -421,6 +508,23 @@ function GroupView({ data }: { data: GroupData }) {
             </p>
           )}
         </div>
+        <AlertDialog open={pending !== null} onOpenChange={(open) => !open && setPending(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Lock in {pending?.name}?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This becomes the group's final pick for everyone. The shortlist and ranking method
+                are frozen until someone reopens it.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={confirmLock} disabled={lockBusy}>
+                Lock it in
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
         {members.length < 2 && (
           <p className="mt-3 text-sm text-muted-foreground">
             It's just you so far — copy the invite link and send it to friends to see who loves or
@@ -466,14 +570,22 @@ function GroupView({ data }: { data: GroupData }) {
           <div>
             <h2 className="text-lg font-semibold">Shared shortlist</h2>
             <p className="text-sm text-muted-foreground">
-              Anyone in the group can edit these — {destinations.length} of {MAX_DESTINATIONS} used.
+              {locked
+                ? "Locked in — reopen the group to change the shortlist."
+                : `Anyone in the group can edit these — ${destinations.length} of ${MAX_DESTINATIONS} used.`}
             </p>
           </div>
-          <Button onClick={addDestination} disabled={destinations.length >= MAX_DESTINATIONS}>
+          <Button
+            onClick={addDestination}
+            disabled={locked || destinations.length >= MAX_DESTINATIONS}
+          >
             <Plus className="size-4" /> Add destination
           </Button>
         </div>
-        <div className="grid gap-4 md:grid-cols-2">
+        <fieldset
+          disabled={locked}
+          className={cn("grid min-w-0 gap-4 md:grid-cols-2", locked && "opacity-60")}
+        >
           {destinations.map((d) => (
             <DestinationEditorCard
               key={d.id}
@@ -493,7 +605,7 @@ function GroupView({ data }: { data: GroupData }) {
               onRemove={() => setDestinations(destinations.filter((x) => x.id !== d.id))}
             />
           ))}
-        </div>
+        </fieldset>
       </section>
     </Shell>
   );
@@ -505,12 +617,18 @@ function RankedCard({
   meId,
   method,
   homeName,
+  isLocked,
+  canLock,
+  onLock,
 }: {
   d: GroupDestination;
   members: MemberRow[];
   meId: string;
   method: GroupMethod;
   homeName: string;
+  isLocked: boolean;
+  canLock: boolean;
+  onLock: () => void;
 }) {
   const sorted = [...d.memberScores].sort((a, b) => b.overall - a.overall);
   const mine = d.memberScores.find((s) => s.memberId === meId);
@@ -526,7 +644,11 @@ function RankedCard({
     <article
       className={cn(
         "rounded-2xl border bg-card p-5 shadow-sm",
-        d.rank === 1 ? "border-primary/40 ring-1 ring-primary/20" : "border-border",
+        isLocked
+          ? "border-primary bg-primary/5 ring-2 ring-primary/40"
+          : d.rank === 1
+            ? "border-primary/40 ring-1 ring-primary/20"
+            : "border-border",
       )}
     >
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -542,6 +664,11 @@ function RankedCard({
             #{d.rank}
           </span>
           <div>
+            {isLocked && (
+              <span className="mb-1.5 mr-2 inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground">
+                <Lock className="size-3" /> Locked in
+              </span>
+            )}
             {d.rank === 1 && (
               <span className="mb-1.5 inline-flex items-center rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
                 🏆 Best group pick
@@ -594,6 +721,14 @@ function RankedCard({
 
       {summary && (
         <p className="mt-4 rounded-xl bg-accent/60 p-4 text-sm text-accent-foreground">{summary}</p>
+      )}
+
+      {canLock && (
+        <div className="mt-4 flex justify-end">
+          <Button variant="outline" size="sm" onClick={onLock}>
+            <Lock className="size-4" /> Lock it in
+          </Button>
+        </div>
       )}
     </article>
   );
