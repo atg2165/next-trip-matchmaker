@@ -1,6 +1,5 @@
 -- "Lock it in": any member can lock one destination as the group's final pick,
 -- and any member can reopen it. No voting.
--- Apply this in the Supabase SQL editor (or via Lovable) before using the feature.
 
 alter table public.groups
   add column if not exists decided_destination_id text,
