@@ -29,6 +29,13 @@
       "when": 1789570836477,
       "tag": "0003_group_lock_in",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789570837477,
+      "tag": "0004_group_cap_30",
+      "breakpoints": true
     }
   ]
 }

@@ -11,7 +11,7 @@ import {
   type Priorities,
 } from "./trip";
 
-export const MAX_GROUP_MEMBERS = 12;
+export const MAX_GROUP_MEMBERS = 30;
 
 export type GroupMethod = "average" | "leastMisery" | "mostPleasure";
 
